@@ -230,8 +230,8 @@ async function main() {
                         'cache-control': 'max-age=0',
                     };
 
-                    // Human-like random delay (2-4 seconds)
-                    const delay = 2000 + Math.random() * 2000;
+                    // Faster initial delay (0.5-1.5 seconds) - still human-like
+                    const delay = 500 + Math.random() * 1000;
                     await new Promise(resolve => setTimeout(resolve, delay));
                 },
             ],
@@ -286,8 +286,8 @@ async function main() {
                     log.info(`💾 Saved ${newListings.length} listings (total: ${saved}/${RESULTS_WANTED})`);
                 }
 
-                // Natural browsing delay before pagination
-                const browseTime = 1500 + Math.random() * 1500;
+                // Quick delay before pagination (0.5-1s)
+                const browseTime = 500 + Math.random() * 500;
                 await new Promise(resolve => setTimeout(resolve, browseTime));
 
                 // Pagination - only if we need more results

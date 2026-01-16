@@ -15,8 +15,12 @@
           "city",
           "state",
           "zip_code",
+          "full_address",
+          "latitude",
+          "longitude",
           "property_type",
           "listing_by",
+          "description",
           "image_url",
           "url"
         ]
@@ -60,12 +64,28 @@
             "label": "ZIP",
             "format": "text"
           },
+          "full_address": {
+            "label": "Full Address",
+            "format": "text"
+          },
+          "latitude": {
+            "label": "Latitude",
+            "format": "text"
+          },
+          "longitude": {
+            "label": "Longitude",
+            "format": "text"
+          },
           "property_type": {
             "label": "Type",
             "format": "text"
           },
           "listing_by": {
             "label": "Listed By",
+            "format": "text"
+          },
+          "description": {
+            "label": "Description",
             "format": "text"
           },
           "image_url": {
