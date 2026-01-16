@@ -1,0 +1,11 @@
+{
+    "actorOutputSchemaVersion": 1,
+    "title": "Trulia Real Estate Scraper Output",
+    "properties": {
+        "dataset": {
+            "type": "string",
+            "title": "Dataset",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
+        }
+    }
+}

@@ -1,0 +1,83 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "price",
+          "beds",
+          "baths",
+          "sqft",
+          "lot_size",
+          "address",
+          "city",
+          "state",
+          "zip_code",
+          "property_type",
+          "listing_by",
+          "image_url",
+          "url"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "price": {
+            "label": "Price",
+            "format": "text"
+          },
+          "beds": {
+            "label": "Beds",
+            "format": "text"
+          },
+          "baths": {
+            "label": "Baths",
+            "format": "text"
+          },
+          "sqft": {
+            "label": "Sq Ft",
+            "format": "text"
+          },
+          "lot_size": {
+            "label": "Lot Size",
+            "format": "text"
+          },
+          "address": {
+            "label": "Address",
+            "format": "text"
+          },
+          "city": {
+            "label": "City",
+            "format": "text"
+          },
+          "state": {
+            "label": "State",
+            "format": "text"
+          },
+          "zip_code": {
+            "label": "ZIP",
+            "format": "text"
+          },
+          "property_type": {
+            "label": "Type",
+            "format": "text"
+          },
+          "listing_by": {
+            "label": "Listed By",
+            "format": "text"
+          },
+          "image_url": {
+            "label": "Image",
+            "format": "text"
+          },
+          "url": {
+            "label": "URL",
+            "format": "link"
+          }
+        }
+      }
+    }
+  }
+}

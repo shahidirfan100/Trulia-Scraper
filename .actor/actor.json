@@ -1,0 +1,16 @@
+{
+  "actorSpecification": 1,
+  "name": "trulia-real-estate-scraper",
+  "title": "Trulia Real Estate Scraper",
+  "description": "Extract real estate listings from Trulia.com including price, beds, baths, sqft, and address",
+  "version": "1.0.0",
+  "buildTag": "latest",
+  "dockerfile": "../Dockerfile",
+  "readme": "../README.md",
+  "input": "./input_schema.json",
+  "output": "./output_schema.json",
+  "nodeJsVersion": "22",
+  "storages": {
+    "dataset": "./dataset_schema.json"
+  }
+}

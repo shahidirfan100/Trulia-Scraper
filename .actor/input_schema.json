@@ -1,0 +1,69 @@
+{
+  "title": "Trulia Real Estate Scraper Input",
+  "description": "Scrape real estate listings from Trulia.com. Provide a location (state/city) or a direct Trulia search URL.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "start_url": {
+      "title": "Start URL",
+      "type": "string",
+      "description": "Direct Trulia search URL. If provided, this will be used instead of location.",
+      "editor": "textfield",
+      "prefill": "https://www.trulia.com/NY/"
+    },
+    "location": {
+      "title": "Location",
+      "type": "string",
+      "description": "State code or city name to search (e.g., 'NY', 'Los Angeles'). Used if Start URL is not provided.",
+      "editor": "textfield",
+      "prefill": "NY"
+    },
+    "listing_type": {
+      "title": "Listing Type",
+      "type": "string",
+      "description": "Type of listings to scrape.",
+      "editor": "select",
+      "default": "buy",
+      "prefill": "buy",
+      "enum": [
+        "buy",
+        "rent"
+      ],
+      "enumTitles": [
+        "For Sale",
+        "For Rent"
+      ]
+    },
+    "results_wanted": {
+      "title": "Results Wanted",
+      "type": "integer",
+      "description": "Maximum number of listings to collect.",
+      "minimum": 1,
+      "default": 20,
+      "prefill": 20,
+      "editor": "number"
+    },
+    "max_pages": {
+      "title": "Maximum Pages",
+      "type": "integer",
+      "description": "Maximum number of search result pages to visit.",
+      "minimum": 1,
+      "default": 5,
+      "prefill": 5,
+      "editor": "number"
+    },
+    "proxyConfiguration": {
+      "title": "Proxy Configuration",
+      "type": "object",
+      "description": "Proxy settings. Residential proxies recommended for Trulia.",
+      "editor": "proxy",
+      "default": {
+        "useApifyProxy": true,
+        "apifyProxyGroups": [
+          "RESIDENTIAL"
+        ]
+      }
+    }
+  },
+  "required": []
+}
