@@ -15,12 +15,13 @@ async function main() {
             location = 'NY',
             listing_type = 'buy',
             results_wanted: RESULTS_WANTED_RAW = 20,
-            max_pages: MAX_PAGES_RAW = 5,
             proxyConfiguration,
         } = input;
 
         const RESULTS_WANTED = Number.isFinite(+RESULTS_WANTED_RAW) ? Math.max(1, +RESULTS_WANTED_RAW) : 20;
-        const MAX_PAGES = Number.isFinite(+MAX_PAGES_RAW) ? Math.max(1, +MAX_PAGES_RAW) : 5;
+        // Auto-calculate pages needed (40 items per page on Trulia)
+        const ITEMS_PER_PAGE = 40;
+        const MAX_PAGES = Math.ceil(RESULTS_WANTED / ITEMS_PER_PAGE);
 
         // Stealth header generator - latest browser versions
         const headerGenerator = new HeaderGenerator({

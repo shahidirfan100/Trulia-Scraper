@@ -6,28 +6,25 @@
       "title": "Overview",
       "transformation": {
         "fields": [
+          "image_url",
           "price",
           "beds",
           "baths",
           "sqft",
-          "lot_size",
           "address",
           "city",
           "state",
-          "zip_code",
-          "full_address",
-          "latitude",
-          "longitude",
           "property_type",
-          "listing_by",
-          "description",
-          "image_url",
           "url"
         ]
       },
       "display": {
         "component": "table",
         "properties": {
+          "image_url": {
+            "label": "Image",
+            "format": "image"
+          },
           "price": {
             "label": "Price",
             "format": "text"
@@ -44,10 +41,6 @@
             "label": "Sq Ft",
             "format": "text"
           },
-          "lot_size": {
-            "label": "Lot Size",
-            "format": "text"
-          },
           "address": {
             "label": "Address",
             "format": "text"
@@ -60,36 +53,8 @@
             "label": "State",
             "format": "text"
           },
-          "zip_code": {
-            "label": "ZIP",
-            "format": "text"
-          },
-          "full_address": {
-            "label": "Full Address",
-            "format": "text"
-          },
-          "latitude": {
-            "label": "Latitude",
-            "format": "text"
-          },
-          "longitude": {
-            "label": "Longitude",
-            "format": "text"
-          },
           "property_type": {
             "label": "Type",
-            "format": "text"
-          },
-          "listing_by": {
-            "label": "Listed By",
-            "format": "text"
-          },
-          "description": {
-            "label": "Description",
-            "format": "text"
-          },
-          "image_url": {
-            "label": "Image",
             "format": "text"
           },
           "url": {

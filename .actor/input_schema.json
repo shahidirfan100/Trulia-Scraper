@@ -37,19 +37,10 @@
     "results_wanted": {
       "title": "Results Wanted",
       "type": "integer",
-      "description": "Maximum number of listings to collect.",
+      "description": "Maximum number of listings to collect. Pagination is calculated automatically.",
       "minimum": 1,
       "default": 20,
       "prefill": 20,
-      "editor": "number"
-    },
-    "max_pages": {
-      "title": "Maximum Pages",
-      "type": "integer",
-      "description": "Maximum number of search result pages to visit.",
-      "minimum": 1,
-      "default": 5,
-      "prefill": 5,
       "editor": "number"
     },
     "proxyConfiguration": {
