@@ -1,5 +1,5 @@
 // Trulia Real Estate Scraper - Production-grade Apify Actor
-// Uses CheerioCrawler with stealth headers for maximum performance
+// Fast, stealthy, cheap - uses __NEXT_DATA__ JSON extraction (no browser needed)
 
 import { Actor, log } from 'apify';
 import { CheerioCrawler, Dataset } from 'crawlee';
@@ -22,7 +22,7 @@ async function main() {
         const RESULTS_WANTED = Number.isFinite(+RESULTS_WANTED_RAW) ? Math.max(1, +RESULTS_WANTED_RAW) : 20;
         const MAX_PAGES = Number.isFinite(+MAX_PAGES_RAW) ? Math.max(1, +MAX_PAGES_RAW) : 5;
 
-        // Initialize header generator with latest browser versions for stealth
+        // Stealth header generator - latest browser versions
         const headerGenerator = new HeaderGenerator({
             browsers: [
                 { name: 'chrome', minVersion: 120, maxVersion: 130 },
@@ -33,13 +33,10 @@ async function main() {
             locales: ['en-US', 'en'],
         });
 
-        // Build start URL
+        // Build Trulia URL
         const buildStartUrl = (loc, type) => {
-            // Trulia URL patterns:
-            // Buy: https://www.trulia.com/NY/
-            // Rent: https://www.trulia.com/for_rent/NY/
             const base = 'https://www.trulia.com';
-            const locPath = encodeURIComponent(loc.toUpperCase());
+            const locPath = encodeURIComponent(loc.toUpperCase().replace(/\s+/g, '_'));
             if (type === 'rent') {
                 return `${base}/for_rent/${locPath}/`;
             }
@@ -55,194 +52,160 @@ async function main() {
         let saved = 0;
         const seenUrls = new Set();
 
-        // Priority 1: Extract data from __NEXT_DATA__ JSON (Next.js site)
+        /**
+         * Extract listings from __NEXT_DATA__ JSON
+         * Trulia stores all listing data in this Next.js hydration script
+         * Path: props.searchData.homes (array of property objects)
+         */
         function extractFromNextData($) {
             try {
-                const scriptData = $('script#__NEXT_DATA__').text();
-                if (!scriptData) return null;
+                const scriptEl = $('script#__NEXT_DATA__');
+                if (!scriptEl.length) {
+                    log.debug('No __NEXT_DATA__ found');
+                    return null;
+                }
 
-                const json = JSON.parse(scriptData);
-                const props = json?.props?.pageProps;
-                if (!props) return null;
+                const json = JSON.parse(scriptEl.text());
 
-                // Look for search results in various possible locations
-                const searchData = props?.searchData ||
-                    props?.searchResults ||
-                    props?.homes ||
-                    props?.listings;
+                // Trulia stores data at props.searchData.homes
+                const searchData = json?.props?.searchData || json?.props?.pageProps?.searchData;
 
-                if (!searchData) return null;
+                if (!searchData) {
+                    log.debug('No searchData in __NEXT_DATA__', { keys: Object.keys(json?.props || {}) });
+                    return null;
+                }
 
-                const homes = searchData?.homes ||
-                    searchData?.results ||
-                    searchData?.listings ||
-                    (Array.isArray(searchData) ? searchData : null);
+                const homes = searchData.homes;
+                if (!homes || !Array.isArray(homes)) {
+                    log.debug('No homes array in searchData');
+                    return null;
+                }
 
-                if (!homes || !Array.isArray(homes)) return null;
+                log.info(`Found ${homes.length} homes in __NEXT_DATA__`);
 
                 return homes.map(home => ({
-                    price: home.price?.formattedPrice || home.price?.value?.toString() || home.listingPrice || null,
-                    beds: home.bedrooms?.toString() || home.beds?.toString() || null,
-                    baths: home.bathrooms?.toString() || home.baths?.toString() || null,
-                    sqft: home.floorSpace?.formattedDimension || home.sqft?.toString() || home.livingArea?.toString() || null,
-                    lot_size: home.lotSize?.formattedDimension || home.lotSize?.value?.toString() || null,
-                    address: home.address?.formattedAddress || home.fullAddress || home.streetAddress || null,
-                    city: home.address?.city || home.city || null,
-                    state: home.address?.stateCode || home.state || null,
-                    zip_code: home.address?.postalCode || home.zipCode || null,
-                    property_type: home.propertyType || home.homeType || null,
-                    listing_by: home.listingAgent?.name || home.broker?.name || home.attribution?.listingAgent || null,
-                    image_url: home.media?.[0]?.url || home.photos?.[0]?.url || home.heroImage?.url || null,
+                    // Price
+                    price: home.price?.formattedPrice ||
+                        (home.price?.price ? `$${home.price.price.toLocaleString()}` : null),
+
+                    // Property details
+                    beds: home.bedrooms?.formattedValue?.replace(/\s*Beds?/i, '') ||
+                        home.bedrooms?.value?.toString() || null,
+                    baths: home.bathrooms?.formattedValue?.replace(/\s*Baths?/i, '') ||
+                        home.bathrooms?.value?.toString() || null,
+                    sqft: home.floorSpace?.formattedDimension?.replace(/\s*sqft/i, '').replace(/,/g, '') ||
+                        home.floorSpace?.value?.toString() || null,
+                    lot_size: home.lotSize?.formattedDimension || null,
+
+                    // Location
+                    address: home.location?.streetAddress ||
+                        home.location?.formattedStreetLine || null,
+                    city: home.location?.city || null,
+                    state: home.location?.stateCode || null,
+                    zip_code: home.location?.zipCode || null,
+                    full_address: home.location?.fullLocation || null,
+                    latitude: home.location?.coordinates?.latitude || null,
+                    longitude: home.location?.coordinates?.longitude || null,
+
+                    // Property info
+                    property_type: home.propertyType?.value ||
+                        home.propertyType?.formattedValue || null,
+
+                    // Listing details
+                    listing_by: home.activeListing?.provider?.broker?.name ||
+                        home.attribution?.listingAgent || null,
+                    description: home.description?.value || null,
+
+                    // Media
+                    image_url: home.media?.heroImage?.url?.medium ||
+                        home.media?.photos?.[0]?.url?.medium || null,
+
+                    // URL - make absolute
                     url: home.url ? `https://www.trulia.com${home.url.startsWith('/') ? '' : '/'}${home.url}` : null,
                 }));
             } catch (e) {
-                log.debug(`__NEXT_DATA__ parsing failed: ${e.message}`);
+                log.warning(`__NEXT_DATA__ parsing error: ${e.message}`);
                 return null;
             }
         }
 
-        // Priority 2: Extract from HTML property cards
-        function extractFromHtml($, baseUrl) {
+        /**
+         * Fallback: Extract from JSON-LD structured data
+         */
+        function extractFromJsonLd($) {
             const listings = [];
 
-            // Trulia property card selectors - multiple fallbacks
-            const cardSelectors = [
-                '[data-testid="property-card"]',
-                '[data-testid="search-result-card"]',
-                'li[data-testid]',
-                '.PropertyCard',
-                '[class*="PropertyCard"]',
-                'article[data-testid]',
-                '.Grid__CellBox-sc-14bsf65-0'
-            ];
-
-            let cards = $([]);
-            for (const selector of cardSelectors) {
-                cards = $(selector);
-                if (cards.length > 0) {
-                    log.debug(`Found ${cards.length} cards with selector: ${selector}`);
-                    break;
-                }
-            }
-
-            cards.each((_, card) => {
+            $('script[type="application/ld+json"]').each((_, el) => {
                 try {
-                    const $card = $(card);
+                    const json = JSON.parse($(el).text());
+                    const items = Array.isArray(json) ? json : [json];
 
-                    // Price extraction
-                    const priceText = $card.find('[data-testid="property-price"], [class*="Price"], .Text-sc-aiai24-0').first().text().trim();
-                    const price = priceText.match(/\$[\d,]+\+?/)?.[0] || priceText || null;
-
-                    // Beds/Baths/Sqft - often in a single line like "3 Beds  2 Baths  1,654 sqft"
-                    const detailsText = $card.find('[data-testid="property-beds"], [data-testid="property-baths"], [data-testid="property-floorSpace"], [class*="detail"], ul').text();
-                    const bedsMatch = detailsText.match(/(\d+)\s*Beds?/i);
-                    const bathsMatch = detailsText.match(/(\d+(?:\.\d+)?)\s*Baths?/i);
-                    const sqftMatch = detailsText.match(/([\d,]+)\s*sqft/i);
-
-                    // Lot size (often shown as badge like "0.88 ACRES")
-                    const lotText = $card.find('[class*="Badge"], [class*="lot"]').text();
-                    const lotMatch = lotText.match(/([\d.]+)\s*ACRES?/i);
-
-                    // Address extraction
-                    const addressEl = $card.find('[data-testid="property-address"], [class*="Address"], address, .Text-sc-aiai24-0').filter((_, el) => {
-                        const text = $(el).text();
-                        return /\d+.*[A-Z]{2}\s*\d{5}/.test(text) || /,\s*[A-Z]{2}/.test(text);
-                    }).first();
-                    const fullAddress = addressEl.text().trim() || $card.find('address').text().trim();
-
-                    // Parse address components
-                    const addressParts = fullAddress.split(',').map(s => s.trim());
-                    const streetAddress = addressParts[0] || null;
-                    const cityStateZip = addressParts.slice(1).join(', ');
-                    const stateZipMatch = cityStateZip.match(/([A-Z]{2})\s*(\d{5})?/);
-
-                    // Property URL
-                    const linkEl = $card.find('a[href*="/p/"], a[href*="/home/"]').first();
-                    let propertyUrl = linkEl.attr('href') || null;
-                    if (propertyUrl && !propertyUrl.startsWith('http')) {
-                        propertyUrl = new URL(propertyUrl, baseUrl).href;
-                    }
-
-                    // Image URL
-                    const imgEl = $card.find('img[src*="trulia"], img[data-src], picture img').first();
-                    const imageUrl = imgEl.attr('src') || imgEl.attr('data-src') || null;
-
-                    // Listing source
-                    const listingBy = $card.find('[class*="attribution"], [class*="broker"], [class*="listing"]').text().replace(/LISTING BY:?/i, '').trim() || null;
-
-                    // Property type badges
-                    const badges = $card.find('[class*="Badge"]').map((_, el) => $(el).text().trim()).get();
-                    const propertyType = badges.find(b => /NEW CONSTRUCTION|BUILDABLE|FORECLOSURE|FOR SALE|FOR RENT/i.test(b)) || null;
-
-                    if (price || streetAddress || propertyUrl) {
-                        listings.push({
-                            price: price,
-                            beds: bedsMatch?.[1] || null,
-                            baths: bathsMatch?.[1] || null,
-                            sqft: sqftMatch?.[1]?.replace(/,/g, '') || null,
-                            lot_size: lotMatch ? `${lotMatch[1]} acres` : null,
-                            address: streetAddress,
-                            city: addressParts[1]?.replace(/,?\s*[A-Z]{2}\s*\d{5}.*/, '').trim() || null,
-                            state: stateZipMatch?.[1] || null,
-                            zip_code: stateZipMatch?.[2] || null,
-                            property_type: propertyType,
-                            listing_by: listingBy,
-                            image_url: imageUrl,
-                            url: propertyUrl,
-                        });
+                    for (const item of items) {
+                        if (item['@type'] === 'RealEstateListing' ||
+                            item['@type'] === 'Product' ||
+                            item['@type']?.includes?.('RealEstateListing')) {
+                            listings.push({
+                                price: item.offers?.price || item.price || null,
+                                address: item.address?.streetAddress || item.name || null,
+                                city: item.address?.addressLocality || null,
+                                state: item.address?.addressRegion || null,
+                                zip_code: item.address?.postalCode || null,
+                                url: item.url || null,
+                                image_url: item.image || null,
+                            });
+                        }
                     }
                 } catch (e) {
-                    log.debug(`Card parsing error: ${e.message}`);
+                    // Ignore malformed JSON-LD
                 }
             });
 
-            return listings;
+            return listings.length > 0 ? listings : null;
         }
 
-        // Find next page URL
-        function findNextPage($, currentUrl, currentPage) {
-            // Try standard pagination links
-            const nextLink = $('a[rel="next"], [data-testid="pagination-next"], a[aria-label*="Next"]').attr('href');
-            if (nextLink) {
-                return nextLink.startsWith('http') ? nextLink : new URL(nextLink, currentUrl).href;
+        /**
+         * Build next page URL
+         * Trulia pattern: /NY/ → /NY/2_p/ → /NY/3_p/
+         */
+        function buildNextPageUrl(currentUrl, currentPage) {
+            try {
+                const url = new URL(currentUrl);
+                const nextPage = currentPage + 1;
+
+                // Remove existing page number if present
+                let path = url.pathname.replace(/\/\d+_p\/?$/, '/');
+
+                // Add new page number
+                if (!path.endsWith('/')) path += '/';
+                path += `${nextPage}_p/`;
+
+                url.pathname = path;
+                return url.href;
+            } catch (e) {
+                log.debug(`Error building next page URL: ${e.message}`);
+                return null;
             }
-
-            // Try page number in URL
-            const urlObj = new URL(currentUrl);
-            const nextPageNum = currentPage + 1;
-
-            // Check for existing page param
-            if (urlObj.pathname.includes(`/${currentPage}_p/`)) {
-                return currentUrl.replace(`/${currentPage}_p/`, `/${nextPageNum}_p/`);
-            }
-
-            // Add page param
-            if (!urlObj.pathname.includes('_p/')) {
-                const basePath = urlObj.pathname.replace(/\/$/, '');
-                urlObj.pathname = `${basePath}/${nextPageNum}_p/`;
-                return urlObj.href;
-            }
-
-            return null;
         }
 
         const crawler = new CheerioCrawler({
             proxyConfiguration: proxyConf,
             maxRequestRetries: 5,
-            maxConcurrency: 3,  // Lower for stealth
+            maxConcurrency: 2,  // Very low for stealth (PerimeterX protection)
             requestHandlerTimeoutSecs: 60,
+
+            // Session pool for rotation
             useSessionPool: true,
             sessionPoolOptions: {
                 maxPoolSize: 50,
                 sessionOptions: {
-                    maxUsageCount: 10,  // Aggressive session rotation
+                    maxUsageCount: 5,  // Aggressive rotation due to PerimeterX
                     maxErrorScore: 3,
                 },
             },
 
+            // Stealth headers
             preNavigationHooks: [
                 async ({ request }) => {
-                    // Generate stealth headers
                     const headers = headerGenerator.getHeaders({
                         operatingSystems: ['windows'],
                         browsers: ['chrome'],
@@ -261,33 +224,48 @@ async function main() {
                         'sec-fetch-site': 'none',
                         'sec-fetch-user': '?1',
                         'upgrade-insecure-requests': '1',
-                        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                         'accept-language': 'en-US,en;q=0.9',
                         'accept-encoding': 'gzip, deflate, br',
                         'cache-control': 'max-age=0',
                     };
 
-                    // Human-like random delay
-                    const delay = Math.random() * 2000 + 1000;
+                    // Human-like random delay (2-4 seconds)
+                    const delay = 2000 + Math.random() * 2000;
                     await new Promise(resolve => setTimeout(resolve, delay));
                 },
             ],
 
             async requestHandler({ request, $, enqueueLinks, session }) {
                 const pageNo = request.userData?.pageNo || 1;
-                log.info(`Processing page ${pageNo}: ${request.url}`);
+                log.info(`📄 Page ${pageNo}: ${request.url}`);
+
+                // Check for blocking
+                const title = $('title').text();
+                if (title.includes('Access Denied') || title.includes('Captcha') || title.includes('Robot')) {
+                    log.error(`🚫 BLOCKED on page ${pageNo}! Title: ${title}`);
+                    session?.retire();
+                    throw new Error('Blocked by anti-bot protection');
+                }
 
                 let listings = [];
 
-                // Priority 1: Try JSON extraction from __NEXT_DATA__
-                const jsonListings = extractFromNextData($);
-                if (jsonListings && jsonListings.length > 0) {
-                    log.info(`Extracted ${jsonListings.length} listings from __NEXT_DATA__`);
-                    listings = jsonListings;
+                // PRIORITY 1: Extract from __NEXT_DATA__ (fastest, most complete)
+                listings = extractFromNextData($);
+
+                if (listings && listings.length > 0) {
+                    log.info(`✅ Extracted ${listings.length} listings from __NEXT_DATA__`);
                 } else {
-                    // Priority 2: Fall back to HTML parsing
-                    listings = extractFromHtml($, request.url);
-                    log.info(`Extracted ${listings.length} listings from HTML`);
+                    // PRIORITY 2: Try JSON-LD fallback
+                    listings = extractFromJsonLd($);
+                    if (listings && listings.length > 0) {
+                        log.info(`✅ Extracted ${listings.length} listings from JSON-LD`);
+                    } else {
+                        log.warning(`⚠️ No listings found on page ${pageNo}`);
+                        // Save debug HTML for inspection
+                        await Actor.setValue(`debug-page-${pageNo}`, $.html(), { contentType: 'text/html' });
+                        listings = [];
+                    }
                 }
 
                 // Deduplicate and save
@@ -295,7 +273,7 @@ async function main() {
                 for (const listing of listings) {
                     if (saved >= RESULTS_WANTED) break;
 
-                    const key = listing.url || listing.address;
+                    const key = listing.url || listing.full_address || listing.address;
                     if (key && !seenUrls.has(key)) {
                         seenUrls.add(key);
                         newListings.push(listing);
@@ -305,44 +283,45 @@ async function main() {
 
                 if (newListings.length > 0) {
                     await Dataset.pushData(newListings);
-                    log.info(`Saved ${newListings.length} listings (total: ${saved})`);
+                    log.info(`💾 Saved ${newListings.length} listings (total: ${saved}/${RESULTS_WANTED})`);
                 }
 
-                // Natural browsing delay
-                const browseTime = Math.random() * 2000 + 1500;
+                // Natural browsing delay before pagination
+                const browseTime = 1500 + Math.random() * 1500;
                 await new Promise(resolve => setTimeout(resolve, browseTime));
 
-                // Pagination
+                // Pagination - only if we need more results
                 if (saved < RESULTS_WANTED && pageNo < MAX_PAGES) {
-                    const nextUrl = findNextPage($, request.url, pageNo);
+                    const nextUrl = buildNextPageUrl(request.url, pageNo);
                     if (nextUrl && !seenUrls.has(nextUrl)) {
                         seenUrls.add(nextUrl);
                         await enqueueLinks({
                             urls: [nextUrl],
                             userData: { pageNo: pageNo + 1 },
                         });
-                        log.info(`Enqueued next page: ${nextUrl}`);
+                        log.info(`➡️ Queued page ${pageNo + 1}: ${nextUrl}`);
                     }
                 }
             },
 
             failedRequestHandler({ request }, error) {
-                log.error(`Request failed: ${request.url} - ${error.message}`);
+                log.error(`❌ Failed: ${request.url} - ${error.message}`);
             },
         });
 
-        log.info(`Starting Trulia scraper for: ${initialUrl}`);
-        log.info(`Results wanted: ${RESULTS_WANTED}, Max pages: ${MAX_PAGES}`);
+        log.info(`🏠 Starting Trulia Scraper`);
+        log.info(`📍 URL: ${initialUrl}`);
+        log.info(`🎯 Target: ${RESULTS_WANTED} listings, max ${MAX_PAGES} pages`);
 
         await crawler.run([{ url: initialUrl, userData: { pageNo: 1 } }]);
 
-        log.info(`Finished. Saved ${saved} listings.`);
+        log.info(`✅ Finished! Saved ${saved} listings.`);
     } finally {
         await Actor.exit();
     }
 }
 
 main().catch(err => {
-    log.error(err.message);
+    log.error(`Fatal error: ${err.message}`);
     process.exit(1);
 });
