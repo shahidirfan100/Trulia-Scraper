@@ -82,7 +82,7 @@ async function main() {
                     return null;
                 }
 
-                log.info(`Found ${homes.length} homes in __NEXT_DATA__`);
+
 
                 return homes.map(home => ({
                     // Price
@@ -239,12 +239,12 @@ async function main() {
 
             async requestHandler({ request, $, enqueueLinks, session }) {
                 const pageNo = request.userData?.pageNo || 1;
-                log.info(`📄 Page ${pageNo}: ${request.url}`);
+                log.debug(`Processing page ${pageNo}`);
 
                 // Check for blocking
                 const title = $('title').text();
                 if (title.includes('Access Denied') || title.includes('Captcha') || title.includes('Robot')) {
-                    log.error(`🚫 BLOCKED on page ${pageNo}! Title: ${title}`);
+                    log.error(`Blocked on page ${pageNo}`);
                     session?.retire();
                     throw new Error('Blocked by anti-bot protection');
                 }
@@ -254,19 +254,15 @@ async function main() {
                 // PRIORITY 1: Extract from __NEXT_DATA__ (fastest, most complete)
                 listings = extractFromNextData($);
 
-                if (listings && listings.length > 0) {
-                    log.info(`✅ Extracted ${listings.length} listings from __NEXT_DATA__`);
-                } else {
-                    // PRIORITY 2: Try JSON-LD fallback
+                if (!listings || listings.length === 0) {
+                    // Try fallback
                     listings = extractFromJsonLd($);
-                    if (listings && listings.length > 0) {
-                        log.info(`✅ Extracted ${listings.length} listings from JSON-LD`);
-                    } else {
-                        log.warning(`⚠️ No listings found on page ${pageNo}`);
-                        // Save debug HTML for inspection
-                        await Actor.setValue(`debug-page-${pageNo}`, $.html(), { contentType: 'text/html' });
-                        listings = [];
-                    }
+                }
+
+                if (!listings || listings.length === 0) {
+                    log.warning(`No listings found on page ${pageNo}`);
+                    await Actor.setValue(`debug-page-${pageNo}`, $.html(), { contentType: 'text/html' });
+                    listings = [];
                 }
 
                 // Deduplicate and save
@@ -284,7 +280,7 @@ async function main() {
 
                 if (newListings.length > 0) {
                     await Dataset.pushData(newListings);
-                    log.info(`💾 Saved ${newListings.length} listings (total: ${saved}/${RESULTS_WANTED})`);
+                    log.info(`Scraped ${saved}/${RESULTS_WANTED} listings`);
                 }
 
                 // Quick delay before pagination (0.5-1s)
@@ -300,23 +296,21 @@ async function main() {
                             urls: [nextUrl],
                             userData: { pageNo: pageNo + 1 },
                         });
-                        log.info(`➡️ Queued page ${pageNo + 1}: ${nextUrl}`);
+                        log.debug(`Queued page ${pageNo + 1}`);
                     }
                 }
             },
 
             failedRequestHandler({ request }, error) {
-                log.error(`❌ Failed: ${request.url} - ${error.message}`);
+                log.error(`Request failed: ${error.message}`);
             },
         });
 
-        log.info(`🏠 Starting Trulia Scraper`);
-        log.info(`📍 URL: ${initialUrl}`);
-        log.info(`🎯 Target: ${RESULTS_WANTED} listings, max ${MAX_PAGES} pages`);
+        log.info(`Starting scraper for ${RESULTS_WANTED} listings`);
 
         await crawler.run([{ url: initialUrl, userData: { pageNo: 1 } }]);
 
-        log.info(`✅ Finished! Saved ${saved} listings.`);
+        log.info(`Finished. Saved ${saved} listings.`);
     } finally {
         await Actor.exit();
     }
